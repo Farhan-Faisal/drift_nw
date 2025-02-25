@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+uvicorn[standard]
+pydantic
+pydantic-settings
+redis
+pandas
+numpy
+websockets
+python-multipart
+slowapi
+h3==3.7.7
+python-dotenv>=0.21.0
