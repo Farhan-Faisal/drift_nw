@@ -1,0 +1,19 @@
+docker rm -f bus-tracking-api 2>/dev/null || true && docker build -t bus-tracking-api:latest . && docker run -it --name bus-tracking-api --rm -p 8080:8080 bus-tracking-api:latest
+
+
+docker rm -f bus-tracking-api 2>/dev/null || true && docker build -t bus-tracking-api:latest . && docker run -it --name bus-tracking-api --rm -p 8080:8080 -e API_KEY=e5834563-c8dd-4009-9828-ed8e195db0f7 bus-tracking-api:latest
+
+
+
+# Build and test locally
+docker rm -f bus-tracking-api 2>/dev/null || true && docker build -t bus-tracking-api:latest . && docker run -it --name bus-tracking-api --rm -p 8080:8080 -e API_KEY=e5834563-c8dd-4009-9828-ed8e195db0f7 bus-tracking-api:latest
+
+# Tag and push to Docker Hub
+docker tag bus-tracking-api:latest jl7ubcdocker/bus-tracking-api:latest
+docker push jl7ubcdocker/bus-tracking-api:latest
+
+# To pull and run from Docker Hub later
+docker pull jl7ubcdocker/bus-tracking-api:latest
+docker run -it --name bus-tracking-api --rm -p 8080:8080 -e API_KEY=e5834563-c8dd-4009-9828-ed8e195db0f7 yourusername/bus-tracking-api:latest
+
+docker run -d -p 8080:8080 -e API_KEY=e5834563-c8dd-4009-9828-ed8e195db0f7 682033470768.dkr.ecr.us-east-1.amazonaws.com/drift-container:latest

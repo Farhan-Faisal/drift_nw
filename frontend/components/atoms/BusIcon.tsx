@@ -1,37 +1,39 @@
 import React from 'react';
-import { Svg, Rect, Circle, Line, Text } from 'react-native-svg';
+import { Svg, Rect, Circle, Line, Text, G} from 'react-native-svg';
 
-const BusIcon = ({ width = 40, height = 40, fillColor = 'blue', borderColor = 'black', wheelColor = 'black' }) => (
-  <Svg width={width} height={height} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-    <Rect x="8" y="18" width="84" height="54" rx="10" ry="10" fill={borderColor} />
-    
-    {/* Bus Body */}
-    <Rect x="10" y="20" width="80" height="50" rx="8" ry="8" fill={fillColor} />
+const BusIcon = ({ 
+  width = 40, 
+  height = 40, 
+  fillColor = 'blue', 
+  borderColor = 'black', 
+  wheelColor = 'black',
+  rotation = 0
+}) => (
+  <Svg 
+    width={width} 
+    height={height} 
+    viewBox="0 0 40 80" 
+    fill="none" 
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    {/* Group to Apply Rotation */}
+    <G transform={`rotate(${rotation}, 20, 40)`}>
+      
+      {/* Shadow for Elevation Effect */}
+      <Rect x="6" y="6" width="28" height="68" rx="6" ry="6" fill="rgba(0, 0, 0, 0.7)" />
 
-    {/* Windows */}
-    <Rect x="15" y="25" width="20" height="15" rx="3" ry="3" fill="white" />
-    <Rect x="40" y="25" width="20" height="15" rx="3" ry="3" fill="white" />
-    <Rect x="65" y="25" width="20" height="15" rx="3" ry="3" fill="white" />
+      {/* Bus Body with Black Border */}
+      <Rect x="5" y="5" width="30" height="70" rx="6" ry="6" fill={fillColor} stroke="black" strokeWidth="2"/>
 
-    {/* Divider Line */}
-    <Line x1="10" y1="45" x2="90" y2="45" stroke="white" strokeWidth="2" />
+      {/* Roof Details (Ventilation Panels) with Borders */}
+      <Rect x="10" y="15" width="20" height="8" fill="white" stroke="black" strokeWidth="1" opacity="0.8"/>
+      <Rect x="10" y="35" width="20" height="8" fill="white" stroke="black" strokeWidth="1" opacity="0.8"/>
+      <Rect x="10" y="55" width="20" height="8" fill="white" stroke="black" strokeWidth="1" opacity="0.8"/>
 
-    {/* Wheels */}
-    <Circle cx="25" cy="75" r="8" fill={wheelColor} />
-    <Circle cx="75" cy="75" r="8" fill={wheelColor} />
-
-    {/* Route Number (Optional) */}
-    <Rect x="35" y="50" width="30" height="12" rx="3" ry="3" fill="white" />
-    <Text
-      x="50"
-      y="58"
-      fontSize="8"
-      fontWeight="bold"
-      textAnchor="middle"
-      fill={fillColor}
-    >
-      Route
-    </Text>
+      {/* Front and Rear Lights */}
+      <Circle cx="15" cy="7" r="3" fill="yellow" stroke="black" strokeWidth="1"/>
+      <Circle cx="25" cy="7" r="3" fill="yellow" stroke="black" strokeWidth="1"/>
+    </G>
   </Svg>
 );
 

@@ -1,0 +1,9 @@
+# Create private repository (default is private)
+aws ecr create-repository --repository-name drift-container
+
+# Login to ECR
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 682033470768.dkr.ecr.us-east-1.amazonaws.com
+
+# Tag and push
+docker tag bus-tracking-api:latest 682033470768.dkr.ecr.us-east-1.amazonaws.com/drift-container:latest
+docker push 682033470768.dkr.ecr.us-east-1.amazonaws.com/drift-container:latest
