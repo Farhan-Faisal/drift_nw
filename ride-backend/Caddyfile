@@ -1,0 +1,14 @@
+# Development configuration
+localhost {
+    # Ride service - handles all API endpoints
+    handle /api/v1/* {
+        reverse_proxy drift-ride-service:8000
+    }
+    # Optional: Add compression
+    encode zstd gzip
+    # Optional: Add logging
+    log {
+        output stdout
+        format console
+    }
+}

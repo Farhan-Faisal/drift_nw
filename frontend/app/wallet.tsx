@@ -3,7 +3,7 @@ import { View, StyleSheet, Alert, ScrollView, RefreshControl } from 'react-nativ
 import { CardField, useStripe } from '@stripe/stripe-react-native';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
-import { SavedCards } from '@/components/SavedCards';
+import { SavedCards } from '@/components/molecules/SavedCards';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { BackButton } from '@/components/ui/BackButton';

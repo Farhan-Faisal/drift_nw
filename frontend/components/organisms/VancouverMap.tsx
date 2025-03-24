@@ -1,304 +1,41 @@
-import React, { useState, useEffect, useRef, Fragment } from 'react';
-import { View } from 'react-native';
-import MapView, { Marker, Polyline, Region } from 'react-native-maps';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Easing, Animated, Text } from 'react-native';
+import MapView, { Marker, AnimatedRegion, Callout } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { MapStyles } from '../styles/VancouverMap.styles';
-import route_shapes from '@/assets/shapes.json';
+
+import { 
+  get_shape_id_from_route_id,
+  get_color_from_route_id, 
+  get_trip_head_sign,
+  calculate_bearing,
+  fetchNearestRoutes,
+  find_closest_route_points,
+  setup_web_socket, 
+  flushBus
+} from '@/components/utils/route_utils';
+
+import { renderPolyline } from '@/components/molecules/RoutePolyline';
+import BusCallout from '@/components/atoms/BusCallout';
 import BusIcon from '@/components/atoms/BusIcon';
-import { loadRouteData, calculateDistance } from '@/components/utils/route_utils';
-import { processPayment } from '@/components/utils/payment';
-import busNames from '@/assets/bus_names.json';
+import SimpleBusIcon from '@/components/atoms/SimpleBusIcon';
 
+const VancouverMap: React.FC<{
+  location: any;
+  setLocation: any;
+  animatedBusData: any;
+  setAnimatedBusData: any
+}> = ({ location, setLocation, animatedBusData, setAnimatedBusData }) => {
 
-const VancouverMap: React.FC<{user_id: any; onBus: string; setOnBus: any; location: any; setLocation: any; busData: Array<{ latitude: number; longitude: number; route_id: number; timestamp: string }>; setBusData: any; closestRoutes: any; setClosestRoutes: any }> = ({
-  user_id,
-  onBus,
-  setOnBus,
-  location,
-  setLocation,
-  busData,
-  setBusData,
-  closestRoutes,
-  setClosestRoutes,
-})  => {
+  const [routes, setRoutes] = useState<Record<number, Array<{ shape_id: any; latitude: number; longitude: number; color: string }>> | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [routes, setRoutes] = useState<Record<number, Array<{ latitude: number; longitude: number; color: string }>> | null>(null);
-  const shapeColorMap = new Map(); 
-  const firstTimestampRef = useRef<string | null>(null);
-  const locationHistoryRef = useRef<Array<{
-    timestamp: string,
-    first_timestamp: string | null,
-    latitude: number,
-    longitude: number
-  }>>([]);
-  const lastLocationRef = useRef<{latitude: number, longitude: number} | null>(null);
+  const markerRefs = useRef<Map<number, Marker | null>>(new Map());
 
-  // Initial Region is UBC
-  const initialRegion: Region = {
-    latitude: 49.27864232910038,
-    longitude: -123.12181381868528,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
-  };
-
-  // CALCULATE CLOSEST ROUTES
+  // LOAD CLOSEST ROUTES AND GET THE USER"S CURRENT LOCATION
   useEffect(() => {
-    if (!location || !routes) return;
-  
-    // Calculate distances for all routes
-    const sortedRoutes = Object.entries(routes)
-      .map(([routeId, routeCoords]) => {
-        const minDistance = Math.min(
-          ...routeCoords.map((point) =>
-            calculateDistance(location.latitude, location.longitude, point.latitude, point.longitude)
-          )
-        );
-        return { routeId: parseInt(routeId), distance: minDistance, color: routeCoords[0].color };
-      })
-      .sort((a, b) => a.distance - b.distance);
-  
-    // Use a Set to ensure uniqueness and extract only the closest two route IDs
-    const uniqueRouteIds = new Set();
-    const closestUniqueRoutes = sortedRoutes
-      .filter((route) => {
-        if (uniqueRouteIds.has(route.routeId)) return false; // Skip duplicates
-        uniqueRouteIds.add(route); // Add unique route ID
-        return true;
-      })
-      .slice(0, 5); // Take the two closest unique routes
-  
-    setClosestRoutes(closestUniqueRoutes.map((r) => r));
-  }, [location, routes]);
-
-
-  // STREAM BUS DATA
-  useEffect(() => {
-    const ws = new WebSocket('ws://35.153.203.112:8080/ws/stream/buses?speed_multiplier=5.0');
+    const API_URL = "http://localhost:8000/api/v1/trips/nearest_routes?latitude=49.2827&longitude=-123.1207";
     
-    // Create a Set to batch WebSocket messages
-    const busLocations = new Map<number, { latitude: number; longitude: number; timestamp: string }>();
-    const data = new Set<string>();
-
-    // Flush function to process batched messages
-    const flush = async () => {
-      const newBusLocations = new Map(busLocations);
-      
-      for (const value of data) {
-        const parsedData = JSON.parse(value);
-        if (parsedData?.data) {
-          // Use Promise.all with map instead of forEach
-          await Promise.all(parsedData.data.map(async (bus: any) => {
-            newBusLocations.set(bus.route_id, {
-              latitude: bus.latitude,
-              longitude: bus.longitude,
-              timestamp: bus.timestamp
-            });
-
-            if (bus.route_id === 293191 && bus.timestamp === '2025-01-12 09:01:28' && onBus === '') {
-              setOnBus(busNames.find((x) => Number(x.shape_id) === bus.route_id)?.trip_headsign || '49');
-
-              const makePayment = async () => {
-                const paymentResult = await processPayment({
-                  user_id: user_id,
-                  bus_route: busNames.find((x) => Number(x.shape_id) === 293191)?.trip_headsign || '25',
-                  charge_amt: 3.50
-                });
-                console.log(paymentResult ? 'Payment successful' : 'Payment failed');
-              };
-
-              await makePayment();
-            }
-          }));
-        }
-      }
-      
-
-      const updatedBusPositions = Array.from(newBusLocations.entries()).map(([route_id, coords]) => ({
-        route_id,
-        ...coords,
-      }));
-
-      setBusData(updatedBusPositions); // Update state with complete list
-      busLocations.clear(); // Clear old locations
-      newBusLocations.forEach((value, key) => busLocations.set(key, value)); // Update busLocations
-      data.clear(); // Clear the batch
-    }
-    
-    let timer = setInterval(flush, 2000);
-
-    ws.onopen = () => {
-      console.log('Bus WebSocket connected');
-    };
-
-    ws.onmessage = (event) => {
-      data.add(event.data); // Add incoming messages to the Set
-    };
-
-    ws.onclose = () => {
-      console.log('WebSocket closed');
-    };
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    // Cleanup on component unmount
-    return () => {
-      clearInterval(timer);
-      ws.close(); // Close the WebSocket connection
-      flush(); // Clear the data buffer
-    };
-  }, []);
-
-  // STREAM USER LOCATION
-  useEffect(() => {
-    const ws_person = new WebSocket('ws://35.153.203.112:8080/ws/stream/person?speed_multiplier=10.0');
-    
-    const data_person = new Set<string>();
-
-    const sendLocationsToAPI = async (locations: typeof locationHistoryRef.current) => {
-      try {
-        // Transform the locations to match the required format
-        const formattedLocations = locations.map(loc => ({
-          first_timestamp: loc.first_timestamp,
-          timestamp: loc.timestamp,
-          lat: loc.latitude,  // rename latitude to lat
-          lon: loc.longitude  // rename longitude to lon
-        }));
-
-        const response = await fetch('http://35.153.203.112:8080/location-match/rule-based', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': 'e5834563-c8dd-4009-9828-ed8e195db0f7'
-          },
-          body: JSON.stringify(formattedLocations)  // send formatted locations
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to send locations');
-        }
-
-        const data = await response.json();
-        console.log("API Response:", data);
-    
-        locationHistoryRef.current = [];
-        return data;
-      } catch (error) {
-        console.error('Error sending locations to API:', error);
-        return {};
-      }
-    };
-
-    // Flush function to process batched messages
-    const flush_user = async () => {
-      for (const value of data_person) {
-        const parsedData = JSON.parse(value);
-        if (parsedData?.data && parsedData.data.length > 0) {
-          const locationData = parsedData.data[0];
-          
-          // Check if location has changed
-          const hasLocationChanged = !lastLocationRef.current || 
-            lastLocationRef.current.latitude !== locationData.lat || 
-            lastLocationRef.current.longitude !== locationData.lon;
-
-          if (hasLocationChanged) {
-            if (firstTimestampRef.current === null) {
-              firstTimestampRef.current = locationData.timestamp;
-            }
-
-            // Update last location
-            lastLocationRef.current = {
-              latitude: locationData.lat,
-              longitude: locationData.lon
-            };
-
-            // console.log(lastLocationRef.current);
-
-            // Add new location to history with null check
-            locationHistoryRef.current.push({
-              first_timestamp: firstTimestampRef.current || null,
-              timestamp: locationData.timestamp,
-              latitude: locationData.lat,
-              longitude: locationData.lon
-            });
-
-            // If we have 30 locations, send them to the API
-            if (locationHistoryRef.current.length >= 100) {
-              const res = await sendLocationsToAPI([...locationHistoryRef.current]);
-              // console.log(res);
-
-              const makePayment = async () => {
-                const paymentResult = await processPayment({
-                  user_id: user_id,
-                  bus_route: busNames.find((x) => Number(x.shape_id) === 292250)?.trip_headsign || '49',
-                  charge_amt: 3.50
-                });
-                console.log(paymentResult ? 'Payment successful' : 'Payment failed');
-              };
-
-              // if (!res.is_on_bus) {
-              //   await makePayment();
-              // }
-
-              locationHistoryRef.current = [];
-            }
-
-            setLocation({
-              first_timestamp: firstTimestampRef.current || null,
-              timestamp: locationData.timestamp,
-              latitude: locationData.lat,
-              longitude: locationData.lon,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            });
-          }
-        }
-      }
-      data_person.clear();
-    }
-    
-    let timer = setInterval(flush_user, 1500);
-
-    ws_person.onopen = () => {
-      console.log('Person WebSocket connected');
-    };
-
-    ws_person.onmessage = (event) => {
-      data_person.add(event.data); // Add incoming messages to the Set
-    };
-
-    ws_person.onclose = () => {
-      console.log('WebSocket closed');
-      firstTimestampRef.current = null; // Reset first timestamp on close
-      // Send any remaining locations before closing
-      if (locationHistoryRef.current.length > 0) {
-        sendLocationsToAPI([...locationHistoryRef.current]);
-      }
-    };
-
-    ws_person.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    // Cleanup on component unmount
-    return () => {
-      clearInterval(timer);
-      if (locationHistoryRef.current.length > 100) {
-        sendLocationsToAPI([...locationHistoryRef.current]);
-      }
-      ws_person.close(); 
-      flush_user(); 
-      firstTimestampRef.current = null;
-      lastLocationRef.current = null;  // Reset last location on cleanup
-    };
-  }, []);
-
-
-  // LOAD ROUTE DATA
-  useEffect(() => {
     (async () => {
-      // Request location permissions
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setErrorMsg('Permission to access location was denied');
@@ -306,68 +43,194 @@ const VancouverMap: React.FC<{user_id: any; onBus: string; setOnBus: any; locati
       }
 
       let currentLocation = await Location.getCurrentPositionAsync({});
-      // const hardcodedLocation = {
-      //   latitude: 49.26077,
-      //   longitude: -123.24899,
-      //   latitudeDelta: 0.01,
-      //   longitudeDelta: 0.01,
-      // };
-  
-      // setLocation(currentLocation.coords);
-      // setLocation(hardcodedLocation);
-      
+      const hardcodedLocation = { latitude: 49.26077, longitude: -123.24899};
+
+      await fetchNearestRoutes(hardcodedLocation, API_URL, setRoutes, setErrorMsg)
+      setLocation(hardcodedLocation);
+      // setLocation(currentLocation);
       console.log(currentLocation);
-      loadRouteData(shapeColorMap, setRoutes);
     })();
   }, []);
 
 
+  // Stream bus data – update only animated markers
+  useEffect(() => {
+    let ws = new WebSocket('ws://localhost:8000/api/v1/trips/bus_positions');
+
+    if (!ws || ws.readyState === WebSocket.CLOSED) {
+      ws = new WebSocket('ws://localhost:8000/api/v1/trips/bus_positions');
+    }
+
+    const busLocations = new Map<number, { latitude: number; longitude: number }>();
+    const data = new Set<string>();
+
+    ws.onopen = () => {
+      console.log("WebSocket connected");
+      const initialLocation = { latitude: 49.26077, longitude: -123.24899 };
+      ws.send(JSON.stringify(initialLocation));
+    };
+
+    const timer = setInterval(() => {
+      flushBus(data, busLocations, (newBusData: any) => {
+
+        setAnimatedBusData((prevAnimatedData: any) => {
+          const updatedData = new Map(prevAnimatedData);
+
+          newBusData.forEach((bus: any) => {
+            const { route_id, latitude, longitude, bearing, vehicle_label } = bus;
+
+            if (!updatedData.has(bus.route_id)) {
+              updatedData.set(
+                route_id,
+                new AnimatedRegion({
+                  latitude: latitude,
+                  longitude: longitude,
+                })
+                  
+              );
+            } else {
+              let region = updatedData.get(route_id)!;
+             
+              region.stopAnimation(() => {
+                region.timing({
+                  latitude: bus.latitude,
+                  longitude: bus.longitude,
+                  duration: 2000,
+                  useNativeDriver: false,
+                  easing: Easing.bezier(0.42, 0, 0.58, 1),
+                }).start();
+              });
+              updatedData.set(bus.route_id, region);
+            }
+          });
+          return updatedData;
+        });
+
+      });
+    }, 3000);
+
+    setup_web_socket(ws, data);
+
+    return () => {
+      clearInterval(timer);
+      ws.close();
+    };
+  }, []);
+
+  
+  useEffect(() => {
+    let recording: { latitude: number; longitude: number; timestamp: string }[] = [];
+  
+    const collectInterval = setInterval(async () => {
+      try {
+        const { coords } = await Location.getCurrentPositionAsync({});
+        const timestamp = new Date().toLocaleTimeString();
+  
+        recording.push({
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          timestamp,
+        });
+  
+        console.log(`🟢 [${timestamp}] Collected: ${coords.latitude}, ${coords.longitude}`);
+      } catch (err) {
+        console.warn("⚠️ Failed to get location:", err);
+      }
+    }, 5000); // Every 5 seconds
+  
+    const printInterval = setInterval(() => {
+      if (recording.length === 0) return;
+  
+      console.log("📍 Location log for the last 30 seconds:");
+      recording.forEach((loc, i) => {
+        console.log(`  ${loc.timestamp} (${i * 5}s): Lat: ${loc.latitude}, Lon: ${loc.longitude}`);
+      });
+  
+      recording = []; // Clear after printing
+    }, 30000); // Every 30 seconds
+  
+    return () => {
+      clearInterval(collectInterval);
+      clearInterval(printInterval);
+    };
+  }, []);
+  
+
   return (
     <View style={MapStyles.container}>
-      <MapView 
-        style={MapStyles.map} 
-        initialRegion={initialRegion}
+      <MapView
+        style={MapStyles.map}
+        initialRegion={{
+          latitude: 49.26077,
+          longitude: -123.24899,
+          latitudeDelta: 0.001,
+          longitudeDelta: 0.001,
+        }}
         showsMyLocationButton
         showsUserLocation
       >
-         {onBus === '' && <Marker
+        {location && (
+          <Marker
             coordinate={{
-              latitude: 49.27864232910038,
-              longitude:  -123.12181381868528,
+              latitude: 49.26077,
+              longitude: -123.24899,
             }}
             title="You are here"
           />
-        }
-        {routes &&
-          Object.keys(routes).map((routeId, index) => {
-            const closestRoute = closestRoutes.find((route: any) => route.routeId === parseInt(routeId));
-            const isClosest = !!closestRoute;
-            return (
-              <Polyline
-                key={routeId}
-                coordinates={routes[parseInt(routeId)]}
-                strokeColor={isClosest ? routes[parseInt(routeId)][0].color : 'gray'}
-                strokeWidth={isClosest ? 6 : 2}
+        )}
+
+      {routes && 
+        Object.keys(routes).map((shapeIdStr) => 
+          renderPolyline(shapeIdStr, routes)
+        )
+      }   
+
+      {routes &&
+        Array.from(animatedBusData.entries()).map(([route_id, animatedPosition]) => {
+  
+          let shapeID = get_shape_id_from_route_id(route_id);
+          const bus_coordinates = animatedPosition as unknown as Animated.WithAnimatedObject<{ latitude: number; longitude: number }>
+          const trip_headsign = get_trip_head_sign(route_id);
+          const shapePoints = routes?.[shapeID];
+
+          let bearing = 0;
+          const busCoordinates = animatedPosition as unknown as {
+            latitude: number;
+            longitude: number;
+          };
+      
+          const { latitude, longitude } = busCoordinates;
+          if (shapePoints && shapePoints.length >= 2) {
+            const [i1, i2] = find_closest_route_points(shapePoints, {latitude, longitude});
+            bearing = calculate_bearing(shapePoints[i1], shapePoints[i2]);
+          }         
+
+          return (
+            <Marker.Animated
+              key={`bus-${route_id}`}
+              ref={(marker) => markerRefs.current.set(route_id, marker)}
+              coordinate={bus_coordinates}
+            >
+              {/* Apply the extracted bearing */}
+              {/* <BusIcon fillColor={get_color_from_route_id(route_id)} rotation={bearing} /> */}
+              <SimpleBusIcon fillColor={get_color_from_route_id(route_id)} rotation={bearing} />
+              
+              {/* <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: get_color_from_route_id(route_id), borderWidth: 2, borderColor: 'white' }} /> */}
+              <BusCallout 
+                route_id={route_id}
+                shape_id={String(shapeID)}
+                trip_headsign={trip_headsign}
               />
-            );
-          })}
-        {routes && 
-        busData.map((bus, index) => (
-              <Marker
-                key={`bus-${bus.route_id}-${bus.timestamp}`}
-                coordinate={{ latitude: bus.latitude, longitude: bus.longitude }}
-                title={
-                  bus.route_id === 293191 && bus.timestamp > '2025-01-12 09:01:28'
-                    ? 'You are here'
-                    : `Bus ID ${bus.route_id}: ${busNames.find((x) => Number(x.shape_id) === bus.route_id)?.trip_headsign || ''} ${bus.timestamp}`
-                }
-              >
-                <BusIcon fillColor={routes[bus.route_id][0].color || 'black'} />
-              </Marker>
-          ))}
+
+            </Marker.Animated>
+          );
+        })
+      }
       </MapView>
     </View>
   );
 };
 
 export default VancouverMap;
+
+

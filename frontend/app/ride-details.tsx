@@ -2,7 +2,6 @@ import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Button } from '@/components/ui/Button';
 import { BackButton } from '@/components/ui/BackButton';
 
 export default function RideDetailsScreen() {

@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useRouter } from 'expo-router';
-import { RecentCharges } from '@/components/RecentCharges';
+import { RecentCharges } from '@/components/molecules/RecentCharges';
 import { useParams } from '@/context/ParamsContext';
 import { Button } from '@/components/ui/Button';
 import { IconSymbol } from '@/components/ui/IconSymbol';

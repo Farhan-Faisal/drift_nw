@@ -11,7 +11,7 @@ const LoginScreen: React.FC = () => {
   const handleLogin = async () => {
     try {
       setLoading(true);
-
+      console.log(process.env.EXPO_PUBLIC_API_URL);
       const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/users/login`, {
         method: 'POST',
         headers: {
@@ -69,7 +69,13 @@ const LoginScreen: React.FC = () => {
       >
         <Text style={styles.buttonText}>{loading ? 'Logging in...' : 'Login'}</Text>
       </TouchableOpacity>
-      <Text style={styles.footerText}>Don't have an account? <Text style={styles.link}>Sign up</Text></Text>
+      
+      <Text style={styles.footerText}>
+        Don't have an account? 
+        <TouchableOpacity onPress={() => router.push('/registration')}>
+          <Text style={styles.link}> Sign up</Text>
+        </TouchableOpacity>
+      </Text>
     </View>
   );
 };
